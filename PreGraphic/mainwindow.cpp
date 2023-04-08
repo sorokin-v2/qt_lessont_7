@@ -22,7 +22,7 @@ MainWindow::~MainWindow()
 {
     delete lineSeries;
     delete chartView;
-    delete chart;
+    //delete chart;     //chart удалится при удалении chartView
     delete ui;
 }
 
@@ -84,13 +84,13 @@ QVector<uint32_t> MainWindow::ReadFile(QString path, uint8_t numberChannel)
             ui->chB_readSucces->setChecked(true);
         }
         else{
-            throw("Не удалось открыть исходный файл " + path);
-        }
-    }
+            throw("Не удалось открыть исходный файл " + path);      //Т.к. эта функция запускается в отдельном потоке, то вместо стандартного
+        }                                                           //Исключения надо использовать QException или его потомков
+    }                                                               //throw QException(Не удалось открыть исходный файл " + path);
     else{
-        throw std::invalid_argument ("Не указан исходный файл");
-    }
-    return readData;
+        throw std::invalid_argument ("Не указан исходный файл");    //Т.к. эта функция запускается в отдельном потоке, то вместо стандартного
+    }                                                               //Исключения надо использовать QException или его потомков
+    return readData;                                                //throw QException("Не указан исходный файл");
 }
 
 QVector<double> MainWindow::ProcessFile(const QVector<uint32_t> dataFile)
@@ -233,23 +233,26 @@ void MainWindow::on_pb_start_clicked()
                                                  * Тут необходимо реализовать код наполнения серии
                                                  * и вызов сигнала для отображения графика
                                                  */
-
+                                                //Можно проверить есть вообще данные для вывода на графике
+                                                //и если их нет, то график можно не выводить или выводить пустые оси...
                                                 lineSeries->clear();
-                                                chart->removeSeries(lineSeries);
+                                                if(chart->series().count() > 0){
+                                                    chart->removeSeries(lineSeries);
+                                                }
                                                 for(int i = 0; i < (FD * chartTime); ++i){
                                                     lineSeries->append(i + 1,(res[i]));
                                                 }
                                                 emit chart_data_ready();
-
+chart->series().count();
                                             };
     try{
     auto result = QtConcurrent::run(read)
                                .then(process)
                                .then(findMax);
     }
-    catch(std::invalid_argument const& ex){
-        ui->chB_readSucces->setChecked(false);
-        QMessageBox mb;
+    catch(std::invalid_argument const& ex){     //Исключение генерится в другом потоке, в основной поток оно не передается
+        ui->chB_readSucces->setChecked(false);  //Чтобы исключение выловить в этом потоке, необходимо использовать класс QException
+        QMessageBox mb;                         //или производный от него. Исключение можно будет обработать во время получения результата из QFuture
         mb.setWindowTitle("Ошибка");
         mb.setText(ex.what());
         mb.exec();
@@ -260,8 +263,25 @@ void MainWindow::on_pb_start_clicked()
         mb.setText("Неизвестная ошибка");
         mb.exec();
     }
+//Чтобы основной поток не блокировался в случае выбрасывания исключения:
+/*
+connect(fw, &QFutureWatcher<void>::finished, this, [&]{
 
+        try{
 
+                fw->future().waitForFinished();
+
+        }
+        catch(QException &ex){
+                ui->chB_readSucces->setChecked(false);
+                QMessageBox mb;
+                mb.setWindowTitle("Ошибка");
+                mb.setText(ex.what());
+                mb.exec();
+        }
+
+});
+*/
 
 
 }
